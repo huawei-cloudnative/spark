@@ -17,7 +17,8 @@
 package org.apache.spark.deploy.k8s.submit
 
 import org.apache.spark.deploy.k8s.{KubernetesConf, KubernetesDriverSpec, KubernetesDriverSpecificConf, KubernetesRoleSpecificConf}
-import org.apache.spark.deploy.k8s.features.{BasicDriverFeatureStep, DriverKubernetesCredentialsFeatureStep, DriverServiceFeatureStep, EnvSecretsFeatureStep, LocalDirsFeatureStep, MountSecretsFeatureStep, MountVolumesFeatureStep}
+import org.apache.spark.deploy.k8s.Config.KUBERNETES_VOLCANO_ENABLE
+import org.apache.spark.deploy.k8s.features.{BasicDriverFeatureStep, DriverKubernetesCredentialsFeatureStep, DriverServiceFeatureStep, EnvSecretsFeatureStep, LocalDirsFeatureStep, MountSecretsFeatureStep, MountVolumesFeatureStep, VolcanoFeatureStep}
 import org.apache.spark.deploy.k8s.features.bindings.{JavaDriverFeatureStep, PythonDriverFeatureStep, RDriverFeatureStep}
 
 private[spark] class KubernetesDriverBuilder(
@@ -51,7 +52,11 @@ private[spark] class KubernetesDriverBuilder(
     provideJavaStep: (
       KubernetesConf[KubernetesDriverSpecificConf]
         => JavaDriverFeatureStep) =
-    new JavaDriverFeatureStep(_)) {
+    new JavaDriverFeatureStep(_),
+    volcanoStep: (
+      KubernetesConf[KubernetesDriverSpecificConf]
+        => VolcanoFeatureStep) =
+    new VolcanoFeatureStep(_)) {  
 
   def buildFromFeatures(
     kubernetesConf: KubernetesConf[KubernetesDriverSpecificConf]): KubernetesDriverSpec = {
@@ -80,8 +85,12 @@ private[spark] class KubernetesDriverBuilder(
           provideRStep(kubernetesConf)}
       .getOrElse(provideJavaStep(kubernetesConf))
 
+    val volcanoFeature = if (kubernetesConf.sparkConf.get(KUBERNETES_VOLCANO_ENABLE)) {
+      Seq(volcanoStep(kubernetesConf))
+    } else Nil
+
     val allFeatures = (baseFeatures :+ bindingsStep) ++
-      secretFeature ++ envSecretFeature ++ volumesFeature
+      secretFeature ++ envSecretFeature ++ volumesFeature ++ volcanoFeature
 
     var spec = KubernetesDriverSpec.initialSpec(kubernetesConf.sparkConf.getAll.toMap)
     for (feature <- allFeatures) {

@@ -16,6 +16,7 @@
  */
 package org.apache.spark.scheduler.cluster.k8s
 
+import org.apache.spark.deploy.k8s.Config.KUBERNETES_VOLCANO_ENABLE
 import org.apache.spark.deploy.k8s.{KubernetesConf, KubernetesExecutorSpecificConf, KubernetesRoleSpecificConf, SparkPod}
 import org.apache.spark.deploy.k8s.features._
 import org.apache.spark.deploy.k8s.features.{BasicExecutorFeatureStep, EnvSecretsFeatureStep, LocalDirsFeatureStep, MountSecretsFeatureStep}
@@ -35,7 +36,10 @@ private[spark] class KubernetesExecutorBuilder(
       new LocalDirsFeatureStep(_),
     provideVolumesStep: (KubernetesConf[_ <: KubernetesRoleSpecificConf]
       => MountVolumesFeatureStep) =
-      new MountVolumesFeatureStep(_)) {
+      new MountVolumesFeatureStep(_),
+    volcanoStep: (KubernetesConf[_ <: KubernetesRoleSpecificConf]
+      => VolcanoFeatureStep) =
+      new VolcanoFeatureStep(_)) {
 
   def buildFromFeatures(
     kubernetesConf: KubernetesConf[KubernetesExecutorSpecificConf]): SparkPod = {
@@ -50,8 +54,11 @@ private[spark] class KubernetesExecutorBuilder(
     val volumesFeature = if (kubernetesConf.roleVolumes.nonEmpty) {
       Seq(provideVolumesStep(kubernetesConf))
     } else Nil
-
-    val allFeatures = baseFeatures ++ secretFeature ++ secretEnvFeature ++ volumesFeature
+    val volcanoFeature = if (kubernetesConf.sparkConf.get(KUBERNETES_VOLCANO_ENABLE)) {
+      Seq(volcanoStep(kubernetesConf))
+    } else Nil
+    val allFeatures = baseFeatures ++ secretFeature ++ secretEnvFeature ++
+      volumesFeature ++ volcanoFeature
 
     var executorPod = SparkPod.initialPod()
     for (feature <- allFeatures) {

@@ -17,13 +17,14 @@
 package org.apache.spark.deploy.k8s.submit
 
 import java.io.StringWriter
-import java.util.{Collections, UUID}
-import java.util.Properties
+import java.util.{Collections, Properties, UUID}
+
+import scala.collection.mutable
+import scala.util.control.NonFatal
 
 import io.fabric8.kubernetes.api.model._
 import io.fabric8.kubernetes.client.KubernetesClient
-import scala.collection.mutable
-import scala.util.control.NonFatal
+import sh.volcano.scheduling._
 
 import org.apache.spark.SparkConf
 import org.apache.spark.deploy.SparkApplication
@@ -143,7 +144,23 @@ private[spark] class Client(
         val otherKubernetesResources =
           resolvedDriverSpec.driverKubernetesResources ++ Seq(configMap)
         addDriverOwnerReference(createdDriverPod, otherKubernetesResources)
-        kubernetesClient.resourceList(otherKubernetesResources: _*).createOrReplace()
+
+        var commonResources = Seq.empty[HasMetadata]
+        for (resource <- otherKubernetesResources) {
+          logInfo(s"resource " +
+            s"${resource.getMetadata().getNamespace}/${resource.getMetadata().getName}," +
+            s" apiVersion ${resource.getApiVersion}, kind ${resource.getKind},")
+
+          if (resource.isInstanceOf[PodGroup]) {
+            val pg = resource.asInstanceOf[PodGroup]
+            val pgClient = v1alpha1.getClient(kubernetesClient, pg.getMetadata.getNamespace)
+            pgClient.createOrReplace(pg)
+          } else {
+            commonResources = commonResources ++ Seq(resource)
+          }
+        }
+
+        kubernetesClient.resourceList(commonResources: _*).createOrReplace()        
       } catch {
         case NonFatal(e) =>
           kubernetesClient.pods().delete(createdDriverPod)
