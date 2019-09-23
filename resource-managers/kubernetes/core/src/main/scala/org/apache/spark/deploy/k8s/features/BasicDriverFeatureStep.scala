@@ -113,6 +113,8 @@ private[spark] class BasicDriverFeatureStep(
         .endResources()
       .build()
 
+    val driverSpecifiedLabel = KubernetesUtils.parsePrefixedKeyValuePairs(conf.sparkConf, KUBERNETES_DRIVER_NODE_SELECTOR_PREFIX)
+
     val driverPod = new PodBuilder(pod.pod)
       .editOrNewMetadata()
         .withName(driverPodName)
@@ -122,6 +124,7 @@ private[spark] class BasicDriverFeatureStep(
       .withNewSpec()
         .withRestartPolicy("Never")
         .withNodeSelector(conf.nodeSelector().asJava)
+        .addToNodeSelector(driverSpecifiedLabel.asJava)
         .addToImagePullSecrets(conf.imagePullSecrets(): _*)
         .endSpec()
       .build()

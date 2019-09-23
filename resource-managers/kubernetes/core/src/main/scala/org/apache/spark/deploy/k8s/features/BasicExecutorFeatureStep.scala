@@ -170,6 +170,10 @@ private[spark] class BasicExecutorFeatureStep(
         .withName(pod.getMetadata.getName)
         .withUid(pod.getMetadata.getUid)
         .build())
+
+    val executorSpecifiedLabel = KubernetesUtils.parsePrefixedKeyValuePairs(kubernetesConf.sparkConf,
+      KUBERNETES_EXECUTOR_NODE_SELECTOR_PREFIX)
+
     val executorPod = new PodBuilder(pod.pod)
       .editOrNewMetadata()
         .withName(name)
@@ -181,6 +185,7 @@ private[spark] class BasicExecutorFeatureStep(
         .withHostname(hostname)
         .withRestartPolicy("Never")
         .withNodeSelector(kubernetesConf.nodeSelector().asJava)
+        .addToNodeSelector(executorSpecifiedLabel.asJava)
         .addToImagePullSecrets(kubernetesConf.imagePullSecrets(): _*)
         .endSpec()
       .build()
