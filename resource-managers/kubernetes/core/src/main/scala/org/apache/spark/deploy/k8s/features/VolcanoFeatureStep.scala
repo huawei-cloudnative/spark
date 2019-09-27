@@ -50,11 +50,9 @@ private[spark] class VolcanoFeatureStep(
         .withSchedulerName(schedulerName)
       .endSpec()
 
-    if (isClusterMode) {
       k8sPodBuilder.editMetadata()
         .addToAnnotations(v1alpha1.POD_GROUP_ANNOTATION, podGroupName)
       .endMetadata()
-    }
 
     val k8sPod = k8sPodBuilder.build()
     SparkPod(k8sPod, pod.container)
