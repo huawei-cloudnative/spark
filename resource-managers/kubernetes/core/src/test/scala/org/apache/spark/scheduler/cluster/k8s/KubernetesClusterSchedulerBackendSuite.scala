@@ -98,7 +98,8 @@ class KubernetesClusterSchedulerBackendSuite extends SparkFunSuite with BeforeAn
       podAllocator,
       lifecycleEventHandler,
       watchEvents,
-      pollEvents)
+      pollEvents,
+      None)
   }
 
   test("Start all components") {
